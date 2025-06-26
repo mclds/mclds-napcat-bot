@@ -1,0 +1,30 @@
+{
+  "name": "mclds-napcat-bot",
+  "version": "0.0.1",
+  "description": "napcat-bot of mclds",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "node-napcat-ts": "^0.4.2"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ./index.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/mclds/mclds-napcat-bot.git"
+  },
+  "author": "enncy",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mclds/mclds-napcat-bot/issues"
+  },
+  "homepage": "https://github.com/mclds/mclds-napcat-bot#readme",
+  "devDependencies": {
+    "@types/node": "^22.10.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
