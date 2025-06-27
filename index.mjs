@@ -15,7 +15,12 @@ const config = {
     max_chat_history: parseInt(process.env.MAX_CHAT_HISTORY ?? '100'),
     verify_records_file: process.env.VERIFY_RECORDS_FILE,
     verify_success_file: process.env.VERIFY_SUCCESS_FILE,
+    /** 查询限制 */
+    query_limit_seconds: 3
 }
+
+
+const limits = new Map()
 
 console.log(config);
 console.log('启动中...');
@@ -46,7 +51,7 @@ console.log('启动中...');
     await napcat.connect()
     console.log('连接成功！');
 
-    napcat.on('message', (ctx) => {
+    napcat.on('message', async (ctx) => {
         // 群聊天记录保存
         if (ctx.message_type === 'group' && ctx.group_id === parseInt(config.group_id?.toString() || '0')) {
             if (config.chat_history_save_path && existsSync(config.chat_history_save_path)) {
@@ -72,22 +77,47 @@ console.log('启动中...');
 
                 for (const msg of messages) {
                     const [_, code] = msg.match(/进服验证\s*(\d+)/) || []
-                    if (code?.length !== 4) {
+                    console.log(code);
+
+                    if (code?.length !== 6) {
                         continue
+                    }
+                    if (!config.group_id) {
+                        ctx.quick_action([Structs.text('群数据错误！请联系管理员')])
+                        return
                     }
 
                     // QQ
                     const qq = ctx.user_id
-                    const record_index = json.findIndex(j => j.qq === qq)
+
+
+                    if (limits.get(qq)) {
+                        const time = limits.get(qq)
+                        if (Date.now() - time < config.query_limit_seconds * 1000) {
+                            ctx.quick_action([Structs.text('查询太频繁了，请稍后再试！')])
+                            return
+                        }
+                    }
+
+                    limits.set(qq, Date.now())
+
+
+                    const record_index = json.findIndex(j => j.code === code)
                     if (record_index === -1) {
-                        ctx.quick_action([Structs.text('未查询到验证数据！')])
+                        ctx.quick_action([Structs.text('未查询到验证数据！请联系管理员')])
                         return
                     }
+
+                    //  查找用户是否加群 
+                    const members = await napcat.get_group_member_list({ group_id: parseInt(config.group_id), no_cache: true })
+                    const member_infos = members.map(m => ({ qq: m.user_id, card: m.card }))
+
+                    if (member_infos.find(i => i.qq === qq) === undefined) {
+                        ctx.quick_action([Structs.text('检测到您尚未加群！' + config.group_id)])
+                        return
+                    }
+
                     const uuid = json[record_index].uuid
-                    if (json[record_index].code !== code) {
-                        ctx.quick_action([Structs.text('未查询到验证数据！')])
-                        return
-                    }
                     if (!config.verify_success_file) {
                         ctx.quick_action([Structs.text('数据保存路径不存在！请联系服务器管理员')])
                         return
@@ -95,11 +125,11 @@ console.log('启动中...');
 
                     mkdirSync(basename(config.verify_success_file), { recursive: true })
                     if (existsSync(config.verify_success_file) === false) {
-                        writeFileSync(config.verify_success_file, JSON.stringify([]))
+                        writeFileSync(config.verify_success_file, JSON.stringify({ records: [] }))
                     }
 
                     const verify_data = JSON.parse(readFileSync(config.verify_success_file, { encoding: 'utf-8' }))
-                    const verify_json = data['records']
+                    const verify_json = verify_data['records']
                     const verified = verify_json.find(j => j.qq === qq)
                     if (verified) {
                         ctx.quick_action([Structs.text(`当前QQ号已经存在绑定玩家：${verified.name}`)])
@@ -115,7 +145,7 @@ console.log('启动中...');
                     verify_json.push({
                         qq: qq,
                         uuid: uuid,
-                        time: new Date().toLocaleDateString('zh-cn')
+                        time: new Date().toLocaleString('zh-cn')
                     })
                     writeFileSync(config.verify_success_file, JSON.stringify(verify_data))
 
