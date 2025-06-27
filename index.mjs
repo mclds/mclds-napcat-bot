@@ -76,8 +76,14 @@ console.log('启动中...');
                 const messages = ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean)
 
                 for (const msg of messages) {
-                    const [_, code] = msg.match(/进服验证\s*(\d+)/) || []
-                    console.log(code);
+                    let code = ''
+                    const [_, verify_code] = msg.match(/进服验证\s*(\d+)/) || []
+                    if (verify_code) {
+                        code = verify_code
+                    }
+                    if (!code) {
+                        code = parseInt(msg.trim()).toString()
+                    }
 
                     if (code?.length !== 6) {
                         continue
@@ -132,7 +138,7 @@ console.log('启动中...');
                     const verify_json = verify_data['records']
                     const verified = verify_json.find(j => j.qq === qq)
                     if (verified) {
-                        ctx.quick_action([Structs.text(`当前QQ号已经存在绑定玩家：${verified.name}`)])
+                        ctx.quick_action([Structs.text(`当前QQ号已经存在绑定！请联系管理员处理`)])
                         return
                     }
 
@@ -150,6 +156,8 @@ console.log('启动中...');
                     writeFileSync(config.verify_success_file, JSON.stringify(verify_data))
 
                 }
+
+                ctx.quick_action([Structs.text('机器人只支持服务器进服验证消息，格式为六位数字，其他问题请联系群腐竹哦~')])
             }
         }
     })
