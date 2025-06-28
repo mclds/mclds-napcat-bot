@@ -154,7 +154,7 @@ console.log('启动中...');
                         time: new Date().toLocaleString('zh-cn')
                     })
                     writeFileSync(config.verify_success_file, JSON.stringify(verify_data))
-
+                    return
                 }
 
                 ctx.quick_action([Structs.text('机器人只支持服务器进服验证消息，格式为六位数字，其他问题请联系群腐竹哦~')])
