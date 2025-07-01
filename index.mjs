@@ -16,7 +16,8 @@ const config = {
     verify_records_file: process.env.VERIFY_RECORDS_FILE,
     verify_success_file: process.env.VERIFY_SUCCESS_FILE,
     /** 查询限制 */
-    query_limit_seconds: 3
+    query_limit_seconds: 3,
+    code_length: 4
 }
 
 
@@ -78,7 +79,7 @@ console.log('启动中...');
                 for (const msg of messages) {
                     const code = (msg.match(/(\d+)/) || [])?.[1].trim() || ''
 
-                    if (code?.length !== 6) {
+                    if (code?.length !== config.code_length) {
                         continue
                     }
                     if (!config.group_id) {
