@@ -104,7 +104,7 @@ console.log('启动中...');
 
                     const record_index = json.findIndex(j => j.code === code)
                     if (record_index === -1) {
-                        ctx.quick_action([Structs.text('未查询到验证数据！请联系管理员')])
+                        ctx.quick_action([Structs.text('未查询到验证数据！请检查验证码是否正确，或者联系管理员处理。')])
                         return
                     }
 
