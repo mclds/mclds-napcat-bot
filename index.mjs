@@ -76,14 +76,7 @@ console.log('启动中...');
                 const messages = ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean)
 
                 for (const msg of messages) {
-                    let code = ''
-                    const [_, verify_code] = msg.match(/进服验证\s*(\d+)/) || []
-                    if (verify_code) {
-                        code = verify_code
-                    }
-                    if (!code) {
-                        code = parseInt(msg.trim()).toString()
-                    }
+                    const code = (msg.match(/(\d+)/) || [])?.[1].trim() || ''
 
                     if (code?.length !== 6) {
                         continue
