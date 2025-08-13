@@ -77,24 +77,24 @@ console.log('启动中...');
                 const messages = ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean)
 
                 for (const msg of messages) {
-                    const code = (msg.match(/(\d+)/) || [])?.[1].trim() || ''
+                    const code = (msg.match(/(\d+)/) || [])?.[1]?.trim() || ''
 
                     if (code?.length !== config.code_length) {
                         continue
                     }
                     if (!config.group_id) {
-                        ctx.quick_action([Structs.text('群数据错误！请联系管理员')])
+                        ctx.quick_action([Structs.text('⚠️群数据错误！请联系管理员')])
                         return
                     }
 
                     // QQ
-                    const qq = ctx.user_id
+                    const qq = String(ctx.user_id)
 
 
                     if (limits.get(qq)) {
                         const time = limits.get(qq)
                         if (Date.now() - time < config.query_limit_seconds * 1000) {
-                            ctx.quick_action([Structs.text('查询太频繁了，请稍后再试！')])
+                            ctx.quick_action([Structs.text('⚠️查询太频繁了，请稍后再试！')])
                             return
                         }
                     }
@@ -104,22 +104,22 @@ console.log('启动中...');
 
                     const record_index = json.findIndex(j => j.code === code)
                     if (record_index === -1) {
-                        ctx.quick_action([Structs.text('未查询到验证数据！请检查验证码是否正确，或者联系管理员处理。')])
+                        ctx.quick_action([Structs.text('⚠️未查询到验证数据！请检查验证码是否正确，或者是否过期，或者联系管理员处理。')])
                         return
                     }
 
                     //  查找用户是否加群 
                     const members = await napcat.get_group_member_list({ group_id: parseInt(config.group_id), no_cache: true })
-                    const member_infos = members.map(m => ({ qq: m.user_id, card: m.card }))
+                    const member_infos = members.map(m => ({ qq: String(m.user_id), card: m.card }))
 
-                    if (member_infos.find(i => i.qq === qq) === undefined) {
-                        ctx.quick_action([Structs.text('检测到您尚未加群！' + config.group_id)])
+                    if (member_infos.find(i => String(i.qq) === qq) === undefined) {
+                        ctx.quick_action([Structs.text('⚠️检测到您尚未加群！' + config.group_id)])
                         return
                     }
 
                     const uuid = json[record_index].uuid
                     if (!config.verify_success_file) {
-                        ctx.quick_action([Structs.text('数据保存路径不存在！请联系服务器管理员')])
+                        ctx.quick_action([Structs.text('⚠️数据保存路径不存在！请联系服务器管理员')])
                         return
                     }
 
@@ -130,14 +130,14 @@ console.log('启动中...');
 
                     const verify_data = JSON.parse(readFileSync(config.verify_success_file, { encoding: 'utf-8' }))
                     const verify_json = verify_data['records']
-                    const verified = verify_json.find(j => j.qq === qq)
+                    const verified = verify_json.find(j => String(j.qq) === qq)
                     if (verified) {
-                        ctx.quick_action([Structs.text(`当前QQ号已经存在绑定！请联系管理员处理`)])
+                        ctx.quick_action([Structs.text(`⚠️当前QQ号已经存在绑定！请联系管理员处理`)])
                         return
                     }
 
                     // 验证成功
-                    ctx.quick_action([Structs.text('验证成功！欢迎加入光梦服务器，重新进服即可。')])
+                    ctx.quick_action([Structs.text('🎉验证成功！欢迎加入光梦服务器，重新进服即可。')])
                     json.splice(record_index, 1)
                     writeFileSync(config.verify_records_file, JSON.stringify(data))
 
@@ -151,7 +151,7 @@ console.log('启动中...');
                     return
                 }
 
-                ctx.quick_action([Structs.text('机器人只支持服务器进服验证消息，格式为六位数字，其他问题请联系群腐竹哦~')])
+                ctx.quick_action([Structs.text('⚠️机器人只支持服务器进服验证消息，格式为4-6位数字，其他问题请联系群腐竹哦~')])
             }
         }
     })
