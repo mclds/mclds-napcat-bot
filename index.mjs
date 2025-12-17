@@ -17,11 +17,17 @@ const config = {
     verify_success_file: process.env.VERIFY_SUCCESS_FILE,
     /** 查询限制 */
     query_limit_seconds: 3,
-    code_length: 4
+    code_length: 4,
+    admin_qq_id: process.env.ADMIN_QQ_ID,
 }
 
 
 const limits = new Map()
+
+/**
+ * @type {Command[]}
+ */
+const registered_commands = []
 
 console.log(config);
 console.log('启动中...');
@@ -64,11 +70,37 @@ console.log('启动中...');
                 records.push(ctx)
                 writeFileSync(config.chat_history_save_path, JSON.stringify(data))
             }
+
         }
 
 
         // 进服验证
         if (ctx.message_type === 'private') {
+
+            // 管理员命令
+            if (config.admin_qq_id && ctx.sender.user_id.toString() === config.admin_qq_id && registered_commands.length > 0) {
+                const messages = ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean)
+                const [send_command] = (messages[0] || '').match(/\/([a-zA-Z_-])/) || []
+                if (send_command) {
+                    try {
+                        const match_command = registered_commands.find(c => {
+                            return send_command === c.name
+                        })
+                        if (match_command) {
+                            match_command.handler(ctx)
+                        } else {
+                            ctx.quick_action([
+                                Structs.text('未找到到相应命令，当前可用命令如下：'),
+                                ...(registered_commands.map(c => Structs.text(`/${c.name}  ${c.desc}`)))
+                            ])
+                        }
+                    } catch (e) {
+                        console.error(e)
+                    }
+                }
+
+            }
+
             if (config.verify_records_file && existsSync(config.verify_records_file)) {
                 const data = JSON.parse(readFileSync(config.verify_records_file, { encoding: 'utf-8' }))
 
@@ -155,7 +187,50 @@ console.log('启动中...');
             }
         }
     })
+
+
+
+    registerCommand('get-qq-by-name', '根据游戏ID查询QQ', (ctx) => {
+ 
+    })
+
+
+    // registerCommand('update-nickname', '更新群里玩家的游戏昵称', (ctx) => {
+    //     const  id = parseInt(config.group_id?.toString() || '0')
+    //     if(!id) return
+    //     napcat.get_group_member_list({ group_id:  id }).then(res=>{
+    //         napcat.set_group_card({
+    //             group_id: id
+    //         })
+    //     }).catch(console.error)
+    // })
 })()
 
 
-function handleMessage(qq = 0, name = '', text = '', time = 0) { }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * 
+ * @param {string} name 
+ * @param {Command['handler']} handler 
+ */
+function registerCommand(name = '', desc = '', handler) {
+    registered_commands.push({
+        name,
+        desc,
+        handler
+    })
+}
