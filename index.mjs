@@ -77,7 +77,7 @@ console.log('启动中...');
         // 进服验证
         if (ctx.message_type === 'private') {
             const messages = ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean)
-            console.log('[msg]', ctx.sender.user_id.toString(), '=>', messages)
+            console.log('[私信]', ctx.sender.nickname, ctx.sender.user_id.toString(), '=>', messages)
 
             // 管理员命令
             if (config.admin_qq_id && ctx.sender.user_id.toString() === config.admin_qq_id && registered_commands.length > 0) {
