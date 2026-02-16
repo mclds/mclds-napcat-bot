@@ -5,7 +5,26 @@ export { }
 declare global {
     interface Command {
         name: string
+        args: string
         desc: string
-        handler: (ctx: PrivateFriendMessage | PrivateGroupMessage) => void
+        handler: (args: string[], quick_action: (msgs: string[])=> Promise<void>) => void | Promise<void>
+    }
+
+    interface VerifySuccessData {
+        qq: string
+        uuid: string
+        time: string
+        names: string[]
+    }
+
+    interface VerifyWhiteListData {
+        reason: string
+        uuid: string
+        names: string[]
+    }
+
+    interface VerifyRecordData{
+        uuid: string
+        name: string
     }
 }
