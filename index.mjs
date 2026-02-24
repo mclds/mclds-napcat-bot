@@ -342,6 +342,9 @@ UUID：${info.uuid}`])
 
         writeFileSync(config.verify_records_file, JSON.stringify({ records: records_json.filter(r => r.uuid === record.uuid) }))
         writeFileSync(config.verify_whitelist_file, JSON.stringify({ whitelist: whitelist_json }))
+
+
+        return await quick_action([`✅成功将玩家${id}加入白名单！理由：${reason}，请通知玩家重新进服验证！`])
     })
 
 
