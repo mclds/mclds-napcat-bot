@@ -54,18 +54,24 @@ console.log('启动中...');
     }, false)
 
     console.log('连接中...');
-    await napcat.connect()
+    try {
+        await napcat.connect()
+    } catch (e) {
+        console.error('连接失败：', e);
+        return
+    }
     console.log('连接成功！');
 
+
     napcat.once('socket.close', () => {
-        console.log('连接已关闭'); 
+        console.log('连接已关闭');
         // 连接问题，发送邮件
         fetch('https://1301696006-6pzra1fuzh.ap-guangzhou.tencentscf.com', {
             method: 'POST',
             body: JSON.stringify({
                 to: 'enncyemail@qq.com',
                 subject: '光梦机器人Napcat连接已关闭',
-                content: `光梦机器人Napcat连接已关闭，请检查服务器状态！\n\n${new Date().toLocaleString()}`
+                html: `光梦机器人Napcat连接已关闭，请检查服务器状态！\n\n${new Date().toLocaleString()}`
             })
         })
     })
