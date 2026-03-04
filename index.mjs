@@ -57,11 +57,11 @@ console.log('启动中...');
     await napcat.connect()
     console.log('连接成功！');
 
-    napcat.on('socket.close', () => {
-        console.log('连接已关闭');
-
+    napcat.once('socket.close', () => {
+        console.log('连接已关闭'); 
         // 连接问题，发送邮件
         fetch('https://1301696006-6pzra1fuzh.ap-guangzhou.tencentscf.com', {
+            method: 'POST',
             body: JSON.stringify({
                 to: 'enncyemail@qq.com',
                 subject: '光梦机器人Napcat连接已关闭',
