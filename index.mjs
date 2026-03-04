@@ -11,6 +11,7 @@ const config = {
     token: process.env.TOKEN,
     group_id: process.env.GROUP_ID,
     notify_email: process.env.NOTIFY_EMAIL,
+    notify_api: process.env.NOTIFY_API,
     chat_history_save_path: process.env.CHAT_HISTORY_SAVE_PATH,
     max_chat_history: parseInt(process.env.MAX_CHAT_HISTORY ?? '100'),
     verify_records_file: process.env.VERIFY_RECORDS_FILE,
