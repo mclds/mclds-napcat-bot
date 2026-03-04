@@ -10,6 +10,7 @@ const config = {
     port: process.env.PORT,
     token: process.env.TOKEN,
     group_id: process.env.GROUP_ID,
+    notify_email: process.env.NOTIFY_EMAIL,
     chat_history_save_path: process.env.CHAT_HISTORY_SAVE_PATH,
     max_chat_history: parseInt(process.env.MAX_CHAT_HISTORY ?? '100'),
     verify_records_file: process.env.VERIFY_RECORDS_FILE,
@@ -64,12 +65,12 @@ console.log('启动中...');
 
 
     napcat.once('socket.close', () => {
-        console.log('连接已关闭');
+        console.log(new Date().toLocaleString(), '连接已关闭，即将发送邮件通知管理员检查服务器状态：=> ', config.notify_email);
         // 连接问题，发送邮件
         fetch('https://1301696006-6pzra1fuzh.ap-guangzhou.tencentscf.com', {
             method: 'POST',
             body: JSON.stringify({
-                to: 'enncyemail@qq.com',
+                to: config.notify_email,
                 subject: '光梦机器人Napcat连接已关闭',
                 html: `光梦机器人Napcat连接已关闭，请检查服务器状态！\n\n${new Date().toLocaleString()}`
             })
