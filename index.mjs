@@ -57,6 +57,19 @@ console.log('启动中...');
     await napcat.connect()
     console.log('连接成功！');
 
+    napcat.on('socket.close', () => {
+        console.log('连接已关闭');
+
+        // 连接问题，发送邮件
+        fetch('https://1301696006-6pzra1fuzh.ap-guangzhou.tencentscf.com', {
+            body: JSON.stringify({
+                to: 'enncyemail@qq.com',
+                subject: '光梦机器人Napcat连接已关闭',
+                content: `光梦机器人Napcat连接已关闭，请检查服务器状态！\n\n${new Date().toLocaleString()}`
+            })
+        })
+    })
+
     napcat.on('message', async (ctx) => {
 
         /**
@@ -317,7 +330,7 @@ UUID：${info.uuid}`])
         const id = args[0] || ''
         const reason = args[1]
 
-        if(!id){
+        if (!id) {
             return await quick_action(['⚠️请输入玩家ID'])
         }
 
