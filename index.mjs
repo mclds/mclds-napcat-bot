@@ -66,9 +66,15 @@ console.log('启动中...');
 
 
     napcat.once('socket.close', () => {
+
+        if (!config.notify_email || !config.notify_api) {
+            console.warn('连接已关闭，notify_email或notify_api未配置，无法发送通知邮件，请检查服务器状态！')
+            return
+        }
+ 
         console.log(new Date().toLocaleString(), '连接已关闭，即将发送邮件通知管理员检查服务器状态：=> ', config.notify_email);
         // 连接问题，发送邮件
-        fetch('https://1301696006-6pzra1fuzh.ap-guangzhou.tencentscf.com', {
+        fetch(config.notify_api, {
             method: 'POST',
             body: JSON.stringify({
                 to: config.notify_email,
