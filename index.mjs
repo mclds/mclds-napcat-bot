@@ -71,7 +71,7 @@ console.log('启动中...');
             console.warn('连接已关闭，notify_email或notify_api未配置，无法发送通知邮件，请检查服务器状态！')
             return
         }
- 
+
         console.log(new Date().toLocaleString(), '连接已关闭，即将发送邮件通知管理员检查服务器状态：=> ', config.notify_email);
         // 连接问题，发送邮件
         fetch(config.notify_api, {
@@ -99,16 +99,20 @@ console.log('启动中...');
 
         // 群聊天记录保存
         if (ctx.message_type === 'group' && ctx.group_id === parseInt(config.group_id?.toString() || '0')) {
-            if (config.chat_history_save_path && existsSync(config.chat_history_save_path)) {
-                const data = JSON.parse(readFileSync(config.chat_history_save_path, { encoding: 'utf-8' }))
-                const records = data['records']
-                if (records.length > config.max_chat_history) {
-                    records.shift()
+            try {
+                if (config.chat_history_save_path && existsSync(config.chat_history_save_path)) {
+                    const data = JSON.parse(readFileSync(config.chat_history_save_path, { encoding: 'utf-8' }))
+                    const records = data['records']
+                    if (records.length > config.max_chat_history) {
+                        records.shift()
+                    }
+                    records.push(ctx)
+                    writeFileSync(config.chat_history_save_path, JSON.stringify(data))
                 }
-                records.push(ctx)
-                writeFileSync(config.chat_history_save_path, JSON.stringify(data))
+            } catch (e) {
+                console.error('error message ctx => ', ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean).join(' | '));
+                console.error('保存聊天记录出现错误：', e)
             }
-
         }
 
 
@@ -164,6 +168,7 @@ console.log('启动中...');
                 if (config.verify_records_file && existsSync(config.verify_records_file)) {
                     const data = JSON.parse(readFileSync(config.verify_records_file, { encoding: 'utf-8' }))
 
+                    /** @type {VerifyRecordData[]} */
                     const json = data['records']
 
                     const messages = ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean)

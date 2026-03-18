@@ -26,5 +26,6 @@ declare global {
     interface VerifyRecordData{
         uuid: string
         name: string
+        code: string
     }
 }
