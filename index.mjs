@@ -1,5 +1,6 @@
 import { NCWebsocket, Structs } from 'node-napcat-ts'
 import dotenv from 'dotenv';
+import http from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename } from 'path';
 
@@ -17,6 +18,10 @@ const config = {
     verify_records_file: process.env.VERIFY_RECORDS_FILE,
     verify_whitelist_file: process.env.VERIFY_WHITELIST_FILE,
     verify_success_file: process.env.VERIFY_SUCCESS_FILE,
+    /** 非正版审核：单向通知 HTTP 接口（Web 服务在玩家提交问卷后调用 → 发群通知管理员） */
+    notify_http_port: parseInt(process.env.NOTIFY_HTTP_PORT || '3002'),
+    notify_secret: process.env.NOTIFY_SECRET || '',
+    notify_admin_qq: process.env.NOTIFY_ADMIN_QQ || '',
     /** 查询限制 */
     query_limit_seconds: 3,
     code_length: 4,
@@ -63,6 +68,38 @@ console.log('启动中...');
         return
     }
     console.log('连接成功！');
+
+    // 单向通知 HTTP 接口（Web 审核服务在玩家提交问卷后调用 → 发群通知管理员审核）
+    const notifyServer = http.createServer(async (req, res) => {
+        const path = (req.url || '').split('?')[0];
+        if (req.method !== 'POST' || path !== '/api/notify') {
+            res.writeHead(404, { 'content-type': 'application/json' });
+            return res.end(JSON.stringify({ error: 'not found' }));
+        }
+        try {
+            const data = JSON.parse((await readBody(req)) || '{}');
+            if (data.secret !== config.notify_secret) {
+                res.writeHead(401, { 'content-type': 'application/json' });
+                return res.end(JSON.stringify({ error: 'unauthorized' }));
+            }
+            const player = data.player || {};
+            const reviewUrl = data.review_url || '';
+            const message = [
+                ...(config.notify_admin_qq ? [Structs.at(parseInt(config.notify_admin_qq))] : []),
+                Structs.text(`🛡 新玩家身份审核\n玩家：${player.name || '未知'}\n认证类型：${authLabel(player.authService)}\n点击审核：${reviewUrl}`),
+            ];
+            await napcat.send_group_msg({ group_id: parseInt(config.group_id), message });
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+            console.error('[notify] 处理失败：', e);
+            res.writeHead(500, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: String(e?.message || e) }));
+        }
+    });
+    notifyServer.listen(config.notify_http_port, '127.0.0.1', () => {
+        console.log(`[notify] 通知服务监听 http://127.0.0.1:${config.notify_http_port}/api/notify`);
+    });
 
 
     napcat.once('socket.close', () => {
@@ -216,6 +253,7 @@ console.log('启动中...');
                         console.log((qq));
 
                         const uuid = json[record_index].uuid
+                        const name = json[record_index].name // splice 前先取出名字（splice 后该下标已移位）
                         if (!config.verify_success_file) {
                             await quick_action(['⚠️数据保存路径不存在！请联系服务器管理员'])
                             return
@@ -245,7 +283,7 @@ console.log('启动中...');
                             qq: qq,
                             uuid: uuid,
                             time: new Date().toLocaleString('zh-cn'),
-                            names: []
+                            names: [name] // 写入时带上名字（lobby 已改为纯 reader，不再回写补名）
                         })
                         writeFileSync(config.verify_success_file, JSON.stringify(verify_data))
                         return
@@ -372,7 +410,8 @@ UUID：${info.uuid}`])
             reason
         })
 
-        writeFileSync(config.verify_records_file, JSON.stringify({ records: records_json.filter(r => r.uuid === record.uuid) }))
+        // 仅移除该玩家的待验证记录（原为 ===，会误删其他所有玩家的验证码）
+        writeFileSync(config.verify_records_file, JSON.stringify({ records: records_json.filter(r => r.uuid !== record.uuid) }))
         writeFileSync(config.verify_whitelist_file, JSON.stringify({ whitelist: whitelist_json }))
 
 
@@ -413,9 +452,30 @@ process.on('uncaughtException', console.error)
 
 
 /**
- * 
- * @param {string} name   
- * @param {Command['handler']} handler 
+ * 读取 HTTP 请求体
+ * @param {http.IncomingMessage} req
+ * @returns {Promise<string>}
+ */
+function readBody(req) {
+    return new Promise((resolve, reject) => {
+        let data = '';
+        req.on('data', c => { data += c; });
+        req.on('end', () => resolve(data));
+        req.on('error', reject);
+    });
+}
+
+/**
+ * 认证类型中文标签
+ * @param {string} s
+ * @returns {string}
+ */
+function authLabel(s){ return {OFFICIAL:'正版(Mojang)',BLESSING_SKIN:'外置(BlessingSkin)',CUSTOM_YGGDRASIL:'外置(LittleSkin)',FLOODGATE:'Bedrock',OFFLINE:'离线(非正版)',UNKNOWN:'未知'}[s]||s||'' }
+
+/**
+ *
+ * @param {string} name
+ * @param {Command['handler']} handler
  */
 function registerCommand(name = '', args = '', desc = '', handler) {
     registered_commands.push({
