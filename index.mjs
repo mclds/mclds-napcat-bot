@@ -22,6 +22,10 @@ const config = {
     notify_http_port: parseInt(process.env.NOTIFY_HTTP_PORT || '3002'),
     notify_secret: process.env.NOTIFY_SECRET || '',
     notify_admin_qq: process.env.NOTIFY_ADMIN_QQ || '',
+    /** 管理员 QQ 列表（逗号分隔），用于「卡片查询」指令鉴权，缺省回退到 notify_admin_qq */
+    admin_qqs: (process.env.ADMIN_QQS || process.env.NOTIFY_ADMIN_QQ || '').split(',').map(s => s.trim()).filter(Boolean),
+    /** 玩家信息卡片渲染 API（mclds-admin 内网接口） */
+    player_card_api: process.env.PLAYER_CARD_API || 'http://127.0.0.1:3067',
     /** 查询限制 */
     query_limit_seconds: 3,
     code_length: 4,
@@ -124,14 +128,23 @@ console.log('启动中...');
     napcat.on('message', async (ctx) => {
 
         /**
-         * 
-         * @param {string[]} msgs
+         * 快捷回复：私聊回复私信，群聊回复群消息（可 @ 发送者）
+         * @param {(string | import('node-napcat-ts').SendMessageSegment)[]} msgs 字符串或消息段（如 Structs.image）
+         * @param {boolean} [at_sender] 群聊时是否 @ 发送者
          */
-        const quick_action = async (msgs = []) => {
-            await napcat.send_private_msg({
-                user_id: ctx.user_id,
-                message: msgs.map(s => (Structs.text(s)))
-            })
+        const quick_action = async (msgs = [], at_sender = false) => {
+            const message = msgs.map(s => typeof s === 'string' ? Structs.text(s) : s)
+            if (ctx.message_type === 'group') {
+                await napcat.send_group_msg({
+                    group_id: ctx.group_id,
+                    message: [...(at_sender ? [Structs.at(ctx.user_id), Structs.text(' ')] : []), ...message]
+                })
+            } else {
+                await napcat.send_private_msg({
+                    user_id: ctx.user_id,
+                    message
+                })
+            }
         }
 
         // 群聊天记录保存
@@ -152,6 +165,27 @@ console.log('启动中...');
             }
         }
 
+        // 群聊命令（仅公开命令可用，其余命令提示私聊使用）
+        if (ctx.message_type === 'group' && ctx.group_id === parseInt(config.group_id?.toString() || '0') && registered_commands.length > 0) {
+            const messages = ctx.message.map(m => m.type === 'text' ? m.data.text.trim() : '').filter(Boolean)
+            const first_word = (messages[0] || '').split(' ')[0]
+            const match_command = registered_commands.find(c => first_word === c.name || first_word === '/' + c.name)
+            if (match_command) {
+                try {
+                    if (!match_command.public) {
+                        return await quick_action(['⚠️请私聊我使用该功能'])
+                    }
+                    const msgs = ctx.message.map(m => String(Reflect.get(m.data, 'text')) || '')
+                    const [cmd, ...args] = msgs[0].split(' ').filter(s => s.trim())
+                    await match_command.handler(args, quick_action, ctx)
+                } catch (e) {
+                    console.error(e)
+                    await quick_action(['⚠️命令执行中出现错误，请稍后重试！'])
+                }
+                return
+            }
+        }
+
 
         // 进服验证
         if (ctx.message_type === 'private') {
@@ -161,28 +195,29 @@ console.log('启动中...');
             try {
 
 
-                // 管理员命令
+                // 命令处理（公开命令所有人可用，其余命令需群管理权限）
                 if (registered_commands.length > 0) {
+                    const first_word = (messages[0] || '').split(' ')[0]
+                    const match_command = registered_commands.find(c => first_word === c.name || first_word === '/' + c.name)
                     const [send_command] = (messages[0] || '').match(/\/([a-zA-Z\u4e00-\u9fa5_-])/) || []
-                    if (send_command) {
-                        // 检查管理员权限
-                        const info = await napcat.get_group_member_info({
-                            group_id: parseInt(config.group_id || ''),
-                            user_id: ctx.user_id
-                        })
-                        if (info.role === 'member') {
-                            return await quick_action(['⚠️你无权使用命令'])
+                    if (send_command || match_command) {
+                        // 非公开命令：检查管理员权限
+                        if (!match_command?.public) {
+                            const info = await napcat.get_group_member_info({
+                                group_id: parseInt(config.group_id || ''),
+                                user_id: ctx.user_id
+                            })
+                            if (info.role === 'member') {
+                                return await quick_action(['⚠️你无权使用命令'])
+                            }
                         }
 
 
                         try {
-                            const match_command = registered_commands.find(c => {
-                                return ((messages[0] || '')).split(' ')[0] === (c.name) || ((messages[0] || '')).split(' ')[0] === ('/' + c.name)
-                            })
                             if (match_command) {
                                 const msgs = ctx.message.map(m => String(Reflect.get(m.data, 'text')) || '')
                                 const [cmd, ...args] = msgs[0].split(' ').filter(s => s.trim())
-                                await match_command.handler(args, quick_action)
+                                await match_command.handler(args, quick_action, ctx)
                             } else {
                                 await quick_action([
                                     '当前可用命令如下：\n',
@@ -437,6 +472,30 @@ UUID：${info.uuid}`])
     })
 
 
+    registerCommand('我的信息', '', '查询自己的玩家信息卡片', async (args, quick_action, ctx) => {
+        const qq = String(ctx.user_id)
+        if (!checkQueryLimit(qq)) {
+            return await quick_action(['⚠️查询太频繁了，请稍后再试！'])
+        }
+        await sendPlayerCard(qq, quick_action)
+    }, true)
+
+
+    registerCommand('卡片查询', '<QQ号码>', '（管理员）查询指定QQ的玩家信息卡片，仅私聊可用', async (args, quick_action, ctx) => {
+        if (ctx.message_type === 'group') {
+            return await quick_action(['⚠️请私聊我使用该功能'])
+        }
+        if (!config.admin_qqs.includes(String(ctx.user_id))) {
+            return await quick_action(['⚠️该功能仅管理员可用'])
+        }
+        const qq = (args[0] || '').trim()
+        if (!/^\d{5,11}$/.test(qq)) {
+            return await quick_action(['⚠️QQ号格式不正确！'])
+        }
+        await sendPlayerCard(qq, quick_action)
+    })
+
+
     // registerCommand('update-nickname', '更新群里玩家的游戏昵称', (ctx) => { 
     // })
 })()
@@ -476,12 +535,63 @@ function authLabel(s){ return {OFFICIAL:'正版(Mojang)',BLESSING_SKIN:'外置(B
  *
  * @param {string} name
  * @param {Command['handler']} handler
+ * @param {boolean} [is_public] 是否公开命令（所有人可用，无需群管理权限）
  */
-function registerCommand(name = '', args = '', desc = '', handler) {
+function registerCommand(name = '', args = '', desc = '', handler, is_public = false) {
     registered_commands.push({
         name,
         args,
         desc,
-        handler
+        handler,
+        public: is_public
     })
+}
+
+/**
+ * 查询限流
+ * @param {string} qq
+ * @returns {boolean} true 表示放行
+ */
+function checkQueryLimit(qq) {
+    const time = limits.get(qq)
+    if (time && Date.now() - time < config.query_limit_seconds * 1000) {
+        return false
+    }
+    limits.set(qq, Date.now())
+    return true
+}
+
+/**
+ * 按 QQ 查询绑定记录并回复玩家信息卡片
+ * @param {string} qq
+ * @param {(msgs: (string | import('node-napcat-ts').SendMessageSegment)[], at_sender?: boolean) => Promise<void>} quick_action
+ */
+async function sendPlayerCard(qq, quick_action) {
+    if (!config.verify_success_file) {
+        return await quick_action(['⚠️数据保存路径不存在！请联系服务器管理员'])
+    }
+    const verify_data = JSON.parse(readFileSync(config.verify_success_file, { encoding: 'utf-8' }))
+    /** @type {VerifySuccessData[]} */
+    const verify_json = verify_data['records']
+    const info = verify_json.find(d => String(d.qq) === String(qq))
+    if (!info) {
+        return await quick_action(['⚠️不存在玩家信息！'])
+    }
+    try {
+        const resp = await fetch(`${config.player_card_api}/api/player?uuid=${encodeURIComponent(info.uuid)}&width=700`, {
+            signal: AbortSignal.timeout(20000)
+        })
+        if (resp.status === 404) {
+            return await quick_action(['⚠️玩家数据不存在！'])
+        }
+        if (!resp.ok) {
+            console.error('[玩家卡片] 渲染接口异常状态：', resp.status)
+            return await quick_action(['⚠️渲染失败，请稍后重试！'])
+        }
+        const buf = Buffer.from(await resp.arrayBuffer())
+        return await quick_action([Structs.image(buf)], true)
+    } catch (e) {
+        console.error('[玩家卡片] 获取渲染图失败：', e)
+        return await quick_action(['⚠️渲染失败，请稍后重试！'])
+    }
 }

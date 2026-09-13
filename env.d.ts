@@ -1,13 +1,17 @@
-import { PrivateFriendMessage } from "node-napcat-ts"
+import { PrivateFriendMessage, SendMessageSegment } from "node-napcat-ts"
 
 export { }
 
 declare global {
+    type QuickAction = (msgs: (string | SendMessageSegment)[], at_sender?: boolean) => Promise<void>
+
     interface Command {
         name: string
         args: string
         desc: string
-        handler: (args: string[], quick_action: (msgs: string[])=> Promise<void>) => void | Promise<void>
+        /** 是否公开命令（所有人可用，无需群管理权限） */
+        public?: boolean
+        handler: (args: string[], quick_action: QuickAction, ctx: any) => void | Promise<void>
     }
 
     interface VerifySuccessData {
